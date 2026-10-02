@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Project Pulse</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#projects">Skip to projects</a>
+    <noscript>
+      <p class="noscript-message">Project Pulse requires JavaScript to load project-data.json and render the dashboard.</p>
+    </noscript>
+
+    <main class="dashboard" aria-labelledby="dashboard-title">
+      <header class="dashboard__header">
+        <div class="dashboard__heading">
+          <p class="dashboard__eyebrow">Contributor dashboard</p>
+          <h1 class="dashboard__title" id="dashboard-title">Project Pulse</h1>
+          <p class="dashboard__intro">Scan active work, ownership, recent movement, and priority across Mona's contributor projects.</p>
+        </div>
+        <p class="dashboard__updated" id="dashboard-updated" aria-live="polite">Loading project-data.json</p>
+      </header>
+
+      <section class="dashboard__summary" aria-labelledby="summary-title">
+        <h2 class="visually-hidden" id="summary-title">Project summary</h2>
+        <ul class="summary-list" aria-label="Project status summary">
+          <li class="summary-item">
+            <span class="summary-item__value" id="summary-total">0</span>
+            <span class="summary-item__label">Total projects</span>
+          </li>
+          <li class="summary-item summary-item--active">
+            <span class="summary-item__value" id="summary-active">0</span>
+            <span class="summary-item__label">Active</span>
+          </li>
+          <li class="summary-item summary-item--planning">
+            <span class="summary-item__value" id="summary-planning">0</span>
+            <span class="summary-item__label">Planning</span>
+          </li>
+          <li class="summary-item summary-item--at-risk">
+            <span class="summary-item__value" id="summary-at-risk">0</span>
+            <span class="summary-item__label">At risk</span>
+          </li>
+          <li class="summary-item summary-item--complete">
+            <span class="summary-item__value" id="summary-complete">0</span>
+            <span class="summary-item__label">Complete</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="project-section" id="projects" aria-labelledby="projects-title">
+        <div class="project-section__header">
+          <h2 class="project-section__title" id="projects-title">Projects</h2>
+          <p class="project-section__count" id="project-count" aria-live="polite">Loading projects</p>
+        </div>
+        <div class="dashboard-state dashboard-state--loading" id="dashboard-state" role="status" aria-live="polite">
+          <div class="dashboard-state__content">
+            <p class="dashboard-state__title">Loading project pulse</p>
+            <p class="dashboard-state__message">Fetching project-data.json.</p>
+          </div>
+        </div>
+        <div class="project-grid" id="project-grid" aria-label="Project cards" hidden></div>
+      </section>
+    </main>
+
+    <script>
+      const requiredFields = ["name", "owner", "status", "recentActivity", "priority", "summary"];
+      const statusModifiers = new Map([
+        ["active", "active"],
+        ["planning", "planning"],
+        ["at risk", "at-risk"],
+        ["at-risk", "at-risk"],
+        ["complete", "complete"]
+      ]);
+      const statusBadgeClasses = {
+        active: "status-badge--active",
+        planning: "status-badge--planning",
+        "at-risk": "status-badge--at-risk",
+        complete: "status-badge--complete",
+        neutral: "status-badge--neutral"
+      };
+      const priorityModifiers = new Map([
+        ["high", "high"],
+        ["medium", "medium"],
+        ["low", "low"]
+      ]);
+      const priorityBadgeClasses = {
+        high: "priority-badge--high",
+        medium: "priority-badge--medium",
+        low: "priority-badge--low",
+        neutral: "priority-badge--neutral"
+      };
+      const projectCardPriorityClasses = {
+        high: "project-card--priority-high",
+        medium: "project-card--priority-medium",
+        low: "project-card--priority-low",
+        neutral: "project-card--priority-neutral"
+      };
+      const dashboardStateClasses = {
+        loading: "dashboard-state--loading",
+        empty: "dashboard-state--empty",
+        error: "dashboard-state--error"
+      };
+
+      const updatedElement = document.querySelector("#dashboard-updated");
+      const projectCountElement = document.querySelector("#project-count");
+      const dashboardStateElement = document.querySelector("#dashboard-state");
+      const projectGridElement = document.querySelector("#project-grid");
+      const summaryElements = {
+        total: document.querySelector("#summary-total"),
+        active: document.querySelector("#summary-active"),
+        planning: document.querySelector("#summary-planning"),
+        "at-risk": document.querySelector("#summary-at-risk"),
+        complete: document.querySelector("#summary-complete")
+      };
+
+      const normalizeValue = (value) => String(value || "").trim();
+
+      const getModifier = (value, allowlist) => {
+        const normalized = normalizeValue(value).toLowerCase();
+        return allowlist.get(normalized) || "neutral";
+      };
+
+      const setText = (element, value) => {
+        element.textContent = value;
+      };
+
+      const setState = (modifier, title, message) => {
+        dashboardStateElement.className = `dashboard-state ${dashboardStateClasses[modifier]}`;
+        dashboardStateElement.replaceChildren();
+
+        const content = document.createElement("div");
+        content.className = "dashboard-state__content";
+
+        const titleElement = document.createElement("p");
+        titleElement.className = "dashboard-state__title";
+        titleElement.textContent = title;
+
+        const messageElement = document.createElement("p");
+        messageElement.className = "dashboard-state__message";
+        messageElement.textContent = message;
+
+        content.append(titleElement, messageElement);
+        dashboardStateElement.append(content);
+        dashboardStateElement.hidden = false;
+        projectGridElement.hidden = true;
+      };
+
+      const createMetadataItem = (label, value, valueClass) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "metadata-item";
+
+        const term = document.createElement("dt");
+        term.textContent = label;
+
+        const description = document.createElement("dd");
+        if (valueClass) {
+          description.className = valueClass;
+        }
+        description.textContent = value;
+
+        wrapper.append(term, description);
+        return wrapper;
+      };
+
+      const createProjectCard = (project) => {
+        const values = Object.fromEntries(requiredFields.map((field) => [field, normalizeValue(project[field])]));
+        const missingFields = requiredFields.filter((field) => !values[field]);
+
+        if (missingFields.length > 0) {
+          console.warn("Project record has missing fields and will use fallbacks.", { project, missingFields });
+        }
+
+        const statusModifier = getModifier(values.status, statusModifiers);
+        const priorityModifier = getModifier(values.priority, priorityModifiers);
+        const article = document.createElement("article");
+        article.className = `project-card ${projectCardPriorityClasses[priorityModifier]}`;
+
+        const header = document.createElement("header");
+        header.className = "project-card__header";
+
+        const name = document.createElement("h3");
+        name.className = "project-card__name";
+        name.textContent = values.name || "Unnamed project";
+
+        const statusBadge = document.createElement("span");
+        statusBadge.className = `status-badge ${statusBadgeClasses[statusModifier]}`;
+        statusBadge.textContent = values.status || "Unknown status";
+
+        header.append(name, statusBadge);
+
+        const summary = document.createElement("p");
+        summary.className = "project-card__summary";
+        summary.textContent = values.summary || "No summary provided yet.";
+
+        const metadata = document.createElement("dl");
+        metadata.className = "project-card__metadata";
+        metadata.append(
+          createMetadataItem("Owner", values.owner || "Unassigned", "project-card__owner"),
+          createMetadataItem("Activity", values.recentActivity || "No recent activity reported", "project-card__activity")
+        );
+
+        const priorityItem = document.createElement("div");
+        priorityItem.className = "metadata-item";
+        const priorityTerm = document.createElement("dt");
+        priorityTerm.textContent = "Priority";
+        const priorityDescription = document.createElement("dd");
+        const priorityBadge = document.createElement("span");
+        priorityBadge.className = `priority-badge ${priorityBadgeClasses[priorityModifier]}`;
+        priorityBadge.textContent = values.priority || "Neutral";
+        priorityDescription.append(priorityBadge);
+        priorityItem.append(priorityTerm, priorityDescription);
+        metadata.append(priorityItem);
+
+        article.append(header, summary, metadata);
+        return { article, statusModifier };
+      };
+
+      const renderProjects = (projects) => {
+        projectGridElement.replaceChildren();
+        const statusCounts = { active: 0, planning: 0, "at-risk": 0, complete: 0 };
+
+        projects.forEach((project) => {
+          const { article, statusModifier } = createProjectCard(project);
+          if (Object.hasOwn(statusCounts, statusModifier)) {
+            statusCounts[statusModifier] += 1;
+          }
+          projectGridElement.append(article);
+        });
+
+        setText(summaryElements.total, String(projects.length));
+        setText(summaryElements.active, String(statusCounts.active));
+        setText(summaryElements.planning, String(statusCounts.planning));
+        setText(summaryElements["at-risk"], String(statusCounts["at-risk"]));
+        setText(summaryElements.complete, String(statusCounts.complete));
+        setText(projectCountElement, `${projects.length} ${projects.length === 1 ? "project" : "projects"} loaded`);
+        setText(updatedElement, `Updated ${new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`);
+
+        dashboardStateElement.hidden = true;
+        projectGridElement.hidden = false;
+      };
+
+      const loadProjects = async () => {
+        try {
+          const response = await fetch("project-data.json", { cache: "no-store" });
+
+          if (!response.ok) {
+            throw new Error(`Fetch failed with status ${response.status}`);
+          }
+
+          const data = await response.json();
+
+          if (!Array.isArray(data.projects)) {
+            setState("error", "Project data is malformed", "project-data.json must contain a top-level projects array.");
+            setText(projectCountElement, "Project data unavailable");
+            setText(updatedElement, "Unable to load project-data.json");
+            return;
+          }
+
+          if (data.projects.length === 0) {
+            setState("empty", "No projects yet", "Add project records to project-data.json to populate the dashboard.");
+            setText(projectCountElement, "No projects loaded");
+            setText(updatedElement, "project-data.json is empty");
+            return;
+          }
+
+          renderProjects(data.projects);
+        } catch (error) {
+          console.error("Unable to load Project Pulse data.", error);
+          setState("error", "Unable to load projects", "Check that project-data.json exists, is valid JSON, and is being served over HTTP.");
+          setText(projectCountElement, "Project data unavailable");
+          setText(updatedElement, "Unable to load project-data.json");
+        }
+      };
+
+      loadProjects();
+    </script>
+  </body>
+</html>

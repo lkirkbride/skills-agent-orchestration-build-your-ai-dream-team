@@ -1,0 +1,44 @@
+{
+  "projects": [
+    {
+      "name": "Contributor Onboarding Refresh",
+      "owner": "Mona Rivera",
+      "status": "Active",
+      "recentActivity": "Updated the first-run checklist and merged feedback from three new contributors.",
+      "priority": "High",
+      "summary": "Simplifies the path from first issue to first pull request with clearer setup steps and reviewer expectations."
+    },
+    {
+      "name": "Release Notes Automation",
+      "owner": "Ari Chen",
+      "status": "Planning",
+      "recentActivity": "Drafted the data contract for grouping changes by feature area and audience.",
+      "priority": "Medium",
+      "summary": "Creates a repeatable workflow for turning merged pull requests into contributor-friendly release notes."
+    },
+    {
+      "name": "Dependency Health Sweep",
+      "owner": "Sam Patel",
+      "status": "At risk",
+      "recentActivity": "Blocked on two transitive package upgrades that need compatibility testing.",
+      "priority": "High",
+      "summary": "Tracks library updates, security patches, and validation work needed before the next maintenance window."
+    },
+    {
+      "name": "Accessibility Review Queue",
+      "owner": "Jo Kim",
+      "status": "Active",
+      "recentActivity": "Finished keyboard checks for the project cards and opened follow-up issues for form labels.",
+      "priority": "Medium",
+      "summary": "Coordinates review findings so contributors can improve usability with small, well-scoped fixes."
+    },
+    {
+      "name": "Documentation Map",
+      "owner": "Nia Okafor",
+      "status": "Complete",
+      "recentActivity": "Published the final navigation map and archived the audit notes.",
+      "priority": "Low",
+      "summary": "Gives contributors a clear overview of maintained guides, owner contacts, and stale documentation areas."
+    }
+  ]
+}
